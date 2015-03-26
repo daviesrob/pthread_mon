@@ -1,0 +1,136 @@
+pthread_mon - a simple tool to capture pthread events.
+
+pthread_mon is a small library that wraps up various pthread functions,
+allowing the times when a program blocks waiting for mutexes or conditionals
+to be recorded.  The idea is that it's simpler to use than other methods
+of looking at threads (e.g. thread_db) and doesn't require root privileges
+to use.  N.B: currently it assumes that it's being built for use against glibc,
+and is probably a bit Linux-specific.
+
+Building
+========
+
+Type 'make'.  It should build a shared library 'pthread_mon.so'.
+
+Use
+===
+
+pthread_mon should be injected into the program being tested using LD_PRELOAD.
+For example:
+
+LD_PRELOAD=pthread_mon.so ./my_prog
+
+It replaces some of the functions provided by libpthread with its own versions
+that record the time when they were called, call the original function and
+then record when it returns.  The recorded timestamps are stored in memory
+until a thread exits, at which point they are dumped out.
+
+By default the output data is written to stderr, this can be changed by
+setting the PTHREAD_MON_OUT environment variable to the name of a file
+where the output should be written.  A '%p' in the filename will be replaced
+by the process ID of the running program.
+
+The output includes four columns:
+
+TIME THREAD_ID EVENT_TYPE ITEM RETURN_ADDRESS
+
+TIME is the time when the event occurred.
+
+THREAD_ID is the thread number.  0 is the main thread.
+
+EVENT_TYPE is a hex code describing what happened:
+
+  10   The thread finished waiting for a mutex.
+  11   The thread started waiting on a mutex.
+  20   The thread finished waiting on a conditional.
+  21   The thread started waiting for a conditional.
+  30   The thread signalled on a conditional.
+  40   The thread broadcast on a conditional.
+
+ITEM is the address of the mutex or conditional involved.
+
+RETURN_ADDRESS is the return address of the called function.
+
+If the program being tested includes debugging symbols, the return address can
+be fed into addr2line to find out where the function will return to.  By
+subtracting 1 from the address, it's also possible (on x86 and possibly other
+platforms) to find the line that called the wrapped function.
+
+The perl script pmon_plot.pl is included to allow the results to be viewed
+using gnuplot.  It converts the data for a specified interval of the
+pthread_mon.so output file into a data file that can be read by gnuplot.
+For usage, see the embedded documentation in the script (perldoc pmon_plot.pl).
+
+Wrapped functions
+=================
+
+pthread_mon.so currently records data for the following functions:
+
+pthread_mutex_lock()
+pthread_mutex_trylock()
+pthread_cond_signal()
+pthread_cond_broadcast()
+pthread_cond_wait()
+pthread_cond_timedwait()
+
+To reduce size of the log, mutex events are only recorded if a mutex fails to
+lock immediately.
+
+Bugs / Limitations
+==================
+
+Injecting code with LD_PRELOAD is a big hack.  Use at your own risk!
+
+Currently no attempt is made to flush out event data while a thread is
+running.  Given this, it's advisable not to let tested programs run for
+too long to stop pthread_mon.so from using up all the memory.
+
+The data is written out at thread exit by a thread cancellation clean-up
+handler.  This may not be called on certain abnormal exits (e.g. signals)
+causing the data for that thread to be lost.
+
+Some of the functions that could block are not wrapped yet (barriers,
+spinlocks, semaphores).
+
+There's no fork handler yet, so calling fork() might lead to some odd
+results.
+
+It could do with a better way of viewing the data.
+
+Glibc's versioned functions made the wrapping operation rather complicated
+and glibc-specific.  The build system really needs to scan libpthread to
+find out which versions of each function are present.
+
+Finding the return address uses gcc builtin functions.
+
+Copyright
+=========
+
+Copyright (c) 2015 Genome Research Ltd. 
+
+Author: Robert Davies <rmd+git@sanger.ac.uk> 
+
+Redistribution and use in source and binary forms, with or without 
+modification, are permitted provided that the following conditions are met: 
+
+1. Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+3. Neither the names Genome Research Ltd and Wellcome Trust Sanger Institute
+   nor the names of its contributors may be used to endorse or promote
+   products derived from this software without specific prior written
+   permission.
+
+THIS SOFTWARE IS PROVIDED BY GENOME RESEARCH LTD AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL GENOME RESEARCH LTD OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.

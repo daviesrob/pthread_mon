@@ -1,0 +1,18 @@
+GLIBC_2.2.5 {
+ global:
+   pthread_cond_signal;
+   pthread_cond_broadcast;
+   pthread_cond_wait;
+   pthread_cond_timedwait;
+ local:
+   pthread_cond_signal_*;
+   pthread_cond_broadcast_*;
+   pthread_cond_wait_*;
+   pthread_cond_timedwait_*;
+};
+GLIBC_2.3.2 {
+   pthread_cond_signal;
+   pthread_cond_broadcast;
+   pthread_cond_wait;
+   pthread_cond_timedwait;
+} GLIBC_2.2.5;
